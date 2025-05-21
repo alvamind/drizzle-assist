@@ -1,7 +1,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { bundleRequire } from 'bundle-require';
-import type { Config as DrizzleKitConfig } from 'drizzle-kit';
+import type { Config as DrizzleKitConfig, PgCredentials } from 'drizzle-kit';
 import type { DrizzleAssistOptions, ResolvedDbConfig } from '@/types';
 import { logger } from '@/utils/logger';
 
@@ -29,11 +29,11 @@ export async function loadAndResolveConfig(
   logger.verbose('Loading and resolving configuration...');
 
   const explicitConfigPath = options?.configPath ? path.resolve(options.configPath) : undefined;
-  let drizzleConfigPath: string | null = explicitConfigPath;
+  let drizzleConfigPath: string | undefined = explicitConfigPath; 
 
   if (!drizzleConfigPath) {
     logger.verbose('No explicit config path provided, searching for drizzle.config.ts/js...');
-    drizzleConfigPath = await findDrizzleConfig(process.cwd());
+    drizzleConfigPath = await findDrizzleConfig(process.cwd()) ?? undefined; 
   }
 
   if (!drizzleConfigPath || !fs.existsSync(drizzleConfigPath)) {
@@ -54,54 +54,75 @@ export async function loadAndResolveConfig(
 
   logger.verbose('Drizzle config loaded:', drizzleConfig);
 
-  const schemaPath = drizzleConfig.schema;
-  if (!schemaPath || typeof schemaPath !== 'string') {
+  const schemaEntry = drizzleConfig.schema;
+  if (!schemaEntry || (typeof schemaEntry !== 'string' && !Array.isArray(schemaEntry))) {
     logger.error('Schema path (schema) not found or invalid in Drizzle config.');
     throw new Error('Schema path (schema) not found or invalid in Drizzle config.');
   }
-  const absoluteSchemaPath = path.resolve(projectRoot, schemaPath);
+  const schemaPathString = Array.isArray(schemaEntry) ? schemaEntry[0] : schemaEntry;
+  if (!schemaPathString || typeof schemaPathString !== 'string') {
+    logger.error('Valid schema path string could not be determined from Drizzle config.');
+    throw new Error('Valid schema path string could not be determined from Drizzle config.');
+  }
+
+  const absoluteSchemaPath = path.resolve(projectRoot, schemaPathString);
   if (!fs.existsSync(absoluteSchemaPath)) {
     logger.error(`Schema file specified in Drizzle config not found: ${absoluteSchemaPath}`);
     throw new Error(`Schema file not found: ${absoluteSchemaPath}`);
   }
 
-  // Extract connection string
   let connectionString: string | undefined;
-  if (drizzleConfig.dbCredentials && 'url' in drizzleConfig.dbCredentials) {
-    connectionString = drizzleConfig.dbCredentials.url;
-  } else if (drizzleConfig.dbCredentials && 'connectionString' in drizzleConfig.dbCredentials) {
-    // older format or custom
-    connectionString = drizzleConfig.dbCredentials.connectionString;
-  }
-  // Support for top-level driver and connectionString for older configs (pre-dialect)
-  else if ('driver' in drizzleConfig && drizzleConfig.driver === 'pg' && 'connectionString' in drizzleConfig) {
-     // @ts-expect-error legacy config
-    connectionString = drizzleConfig.connectionString;
-  }
 
-
-  if (!connectionString) {
-    logger.error('Database connection string (dbCredentials.url or dbCredentials.connectionString) not found in Drizzle config.');
-    throw new Error('Database connection string not found in Drizzle config.');
+  if (drizzleConfig.dialect === 'postgresql') {
+    // TypeScript knows `drizzleConfig.dbCredentials` is `PgCredentials | undefined` here.
+    const pgCredentials = drizzleConfig.dbCredentials as PgCredentials | undefined; // Explicit cast for clarity
+    if (typeof pgCredentials === 'string') {
+      connectionString = pgCredentials;
+    } else if (typeof pgCredentials === 'object' && pgCredentials !== null) {
+      connectionString = pgCredentials.url || pgCredentials.connectionString;
+    }
+  } else if (!drizzleConfig.dialect) {
+    const legacyConfig = drizzleConfig as any; 
+    if (legacyConfig.dbCredentials) {
+        if (typeof legacyConfig.dbCredentials === 'object' && legacyConfig.dbCredentials !== null) {
+            if ('url' in legacyConfig.dbCredentials && typeof legacyConfig.dbCredentials.url === 'string') {
+                connectionString = legacyConfig.dbCredentials.url;
+            } else if ('connectionString' in legacyConfig.dbCredentials && typeof legacyConfig.dbCredentials.connectionString === 'string') {
+                connectionString = legacyConfig.dbCredentials.connectionString;
+            }
+        } else if (typeof legacyConfig.dbCredentials === 'string') { // Handle case where dbCredentials is a string directly
+            connectionString = legacyConfig.dbCredentials;
+        }
+    }
+    if (!connectionString && legacyConfig.driver === 'pg' && typeof legacyConfig.connectionString === 'string') {
+        connectionString = legacyConfig.connectionString;
+    }
   }
-
-  // Ensure dialect is postgresql if present
-  if (drizzleConfig.dialect && drizzleConfig.dialect !== 'postgresql') {
+  
+  if (!connectionString && drizzleConfig.dialect && drizzleConfig.dialect !== 'postgresql') {
     logger.error(`Unsupported Drizzle dialect: ${drizzleConfig.dialect}. Drizzle-Assist currently only supports 'postgresql'.`);
     throw new Error(`Unsupported Drizzle dialect: ${drizzleConfig.dialect}. Only 'postgresql' is supported.`);
   }
-
+  
+  if (!connectionString) {
+    logger.error(
+      'Database connection string could not be determined. Ensure your drizzle.config.ts has dialect: "postgresql" and dbCredentials.url (or dbCredentials.connectionString or dbCredentials directly as a string) is set, or uses a supported legacy format.'
+    );
+    throw new Error('Database connection string not found or could not be determined.');
+  }
 
   const resolvedConfig: ResolvedDbConfig = {
     connectionString,
     schemaPath: absoluteSchemaPath,
     drizzleConfig,
+    drizzleConfigFilePath: drizzleConfigPath, 
     projectRoot,
   };
 
   logger.verbose('Resolved configuration:', {
-    connectionString: resolvedConfig.connectionString ? '********' : undefined, // Hide sensitive data
+    connectionString: resolvedConfig.connectionString ? '********' : undefined, 
     schemaPath: resolvedConfig.schemaPath,
+    drizzleConfigFilePath: resolvedConfig.drizzleConfigFilePath,
     projectRoot: resolvedConfig.projectRoot,
   });
 

@@ -12,11 +12,9 @@ export async function executeWithPostgresClient<T>(
 ): Promise<T> {
   const resolvedConfig = await loadAndResolveConfig(options);
   logger.verbose('Creating postgres client...');
-  // Note: postgres-js typically infers SSL settings from the connection string (e.g., ?sslmode=require)
-  // Avoid hardcoding ssl: 'require' unless it's a specific design choice to enforce it.
   const pgClient = postgres(resolvedConfig.connectionString, {
-    // max: 1, // Optional: good for CLI tools to not exhaust connections
-    onnotice: (notice) => logger.verbose(`Postgres notice: ${notice.message}`),
+    // max: 1, 
+    onnotice: (notice) => logger.verbose(`Postgres notice: ${notice['message']}`), 
   });
 
   try {
@@ -40,7 +38,6 @@ export async function executeWithDrizzle<T>(
   const resolvedConfig = await loadAndResolveConfig(options);
   
   logger.verbose(`Loading user schema from: ${resolvedConfig.schemaPath}`);
-  // Use pathToFileURL for robust dynamic importing, especially with Windows paths
   const schemaFileUrl = pathToFileURL(resolvedConfig.schemaPath).href;
   const userSchemaModule = await import(schemaFileUrl);
 
@@ -54,11 +51,16 @@ export async function executeWithDrizzle<T>(
   logger.verbose('Creating postgres client for Drizzle...');
   const pgClient = postgres(resolvedConfig.connectionString, {
     // max: 1,
-    onnotice: (notice) => logger.verbose(`Postgres notice: ${notice.message}`),
+    onnotice: (notice) => logger.verbose(`Postgres notice: ${notice['message']}`), 
   });
   
   logger.verbose('Initializing Drizzle ORM instance...');
-  const db = drizzle(pgClient, { schema: schemaObject, logger: resolvedConfig.drizzleConfig.verbose });
+  // Use `verbose` from drizzle-kit config to control Drizzle ORM logging.
+  // The `logger` property for Drizzle ORM instance takes a boolean or a custom logger.
+  const drizzleOrmLoggerOption = !!resolvedConfig.drizzleConfig.verbose;
+
+  const db = drizzle(pgClient, { schema: schemaObject, logger: drizzleOrmLoggerOption });
+
 
   try {
     logger.verbose('Executing action with Drizzle instance.');

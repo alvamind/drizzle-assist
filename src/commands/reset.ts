@@ -15,7 +15,8 @@ async function resetDbAction(
   const startTime = performance.now();
 
   logger.info('\n📊 Checking tables before reset...');
-  const tablesBefore = await pgClient`
+  // Explicitly type the expected row structure
+  const tablesBefore = await pgClient<{ table_name: string }[]>`
     SELECT table_name
     FROM information_schema.tables
     WHERE table_schema = 'public'
@@ -25,7 +26,7 @@ async function resetDbAction(
   if (tablesBefore.length === 0) {
     logger.info('   No tables found in the public schema.');
   } else {
-    tablesBefore.forEach((table: { table_name: string }, i: number) => {
+    tablesBefore.forEach((table, i) => { // 'table' is now { table_name: string }
       logger.info(`   ${i + 1}. ${table.table_name}`);
     });
     logger.info(`   Total: ${tablesBefore.length} tables`);
@@ -33,7 +34,6 @@ async function resetDbAction(
 
   logger.info('\n🗑️ Dropping all tables in public schema...');
   try {
-    // Using DO block for atomicity and to handle dependencies
     await pgClient`
       DO $$ DECLARE
         r RECORD;
@@ -50,7 +50,8 @@ async function resetDbAction(
   }
 
   logger.info('\n📊 Verifying tables after drop...');
-  const tablesAfter = await pgClient`
+  // Explicitly type the expected row structure
+  const tablesAfter = await pgClient<{ table_name: string }[]>`
     SELECT table_name
     FROM information_schema.tables
     WHERE table_schema = 'public'
@@ -61,7 +62,7 @@ async function resetDbAction(
     logger.info('   Verification successful: No tables found in public schema.');
   } else {
     logger.warn(`   Warning: ${tablesAfter.length} tables still found in public schema:`);
-    tablesAfter.forEach((table: { table_name: string }, i: number) => {
+    tablesAfter.forEach((table, i) => { // 'table' is now { table_name: string }
       logger.warn(`   ${i + 1}. ${table.table_name}`);
     });
   }
@@ -69,13 +70,11 @@ async function resetDbAction(
   if (!cmdOptions.skipSchemaRecreation) {
     logger.info('\n🔨 Recreating database schema via drizzle-kit push...');
     try {
-      // Pass the original config path to drizzle-kit, and the project root as CWD
-      await runDrizzleKitPush(config.drizzleConfig.out ? config.drizzleConfig.schema : undefined, config.projectRoot);
+      // Pass the path to drizzle.config.ts and the project root for CWD
+      await runDrizzleKitPush(config.drizzleConfigFilePath, config.projectRoot);
       logger.info('   Database schema recreated successfully.');
     } catch (error) {
       logger.error('   ❌ Error recreating database schema with drizzle-kit push:', error);
-      // We don't re-throw here, as tables are already dropped. The reset is partially complete.
-      // The user will see the error from drizzle-kit.
     }
   } else {
     logger.info('\n⏩ Schema recreation skipped as per --skip-schema-recreation flag.');
@@ -89,7 +88,6 @@ async function resetDbAction(
 export async function resetDatabase(options?: ResetDatabaseOptions): Promise<void> {
   const cmdOptions = { skipSchemaRecreation: false, ...options };
   logger.verbose('Starting resetDatabase operation with options:', cmdOptions);
-  // We need to pass cmdOptions (which includes skipSchemaRecreation) into the action
   await executeWithPostgresClient(options, (pgClient, config) =>
     resetDbAction(pgClient, config, cmdOptions)
   );

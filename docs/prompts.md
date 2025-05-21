@@ -1,0 +1,1 @@
+I want to create npmjs library with CLI and programmatic API for reset, clear, check . the name is Drizzle-Assist. should be able to read and use of lib user drizzle.config.ts . dont forget the readme. use bun first approach and HOF

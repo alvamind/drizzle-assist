@@ -6,7 +6,8 @@ import { logger } from '@/utils/logger';
 async function checkDbAction(pgClient: postgres.Sql, _config: ResolvedDbConfig): Promise<void> {
   logger.info('Connecting to database to check tables...');
 
-  const tables = await pgClient`
+  // Explicitly type the expected row structure from the query
+  const tables = await pgClient<{ table_name: string }[]>`
     SELECT table_name
     FROM information_schema.tables
     WHERE table_schema = 'public'
@@ -17,8 +18,8 @@ async function checkDbAction(pgClient: postgres.Sql, _config: ResolvedDbConfig):
     logger.info('No tables found in the public schema.');
   } else {
     logger.info('Tables in public schema:');
-    tables.forEach((table: { table_name: string }, i: number) => {
-      console.log(`${i + 1}. ${table.table_name}`); // Direct console.log for cleaner list output
+    tables.forEach((table, i) => { // 'table' is now correctly typed as { table_name: string }
+      console.log(`${i + 1}. ${table.table_name}`); 
     });
   }
 }

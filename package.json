@@ -34,25 +34,25 @@
     "da": "bun run ./src/cli.ts"
   },
   "dependencies": {
-    "bundle-require": "^4.0.2", 
+    "bunchee": "^6.5.2",
+    "bundle-require": "^4.0.2",
     "commander": "^12.0.0",
-    "drizzle-orm": "latest", 
-    "drizzle-seed": "^0.3.0", 
+    "drizzle-orm": "latest",
+    "drizzle-seed": "^0.3.0",
     "postgres": "^3.4.3"
   },
   "devDependencies": {
     "@types/node": "^20.11.20",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
-    "bunchee": "^4.6.0",
-    "dotenv": "^16.4.5", 
-    "drizzle-kit": "latest", 
+    "dotenv": "^16.4.5",
+    "drizzle-kit": "latest",
     "eslint": "^8.56.0",
     "prettier": "^3.2.5",
     "typescript": "^5.3.3"
   },
   "peerDependencies": {
-    "drizzle-kit": ">=0.20.0" 
+    "drizzle-kit": ">=0.20.0"
   },
   "engines": {
     "node": ">=18.0.0",

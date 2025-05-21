@@ -18,5 +18,6 @@ export interface ResolvedDbConfig {
   connectionString: string;
   schemaPath: string; // Absolute path to user's schema.ts
   drizzleConfig: Config; // The loaded drizzle.config.ts content
+  drizzleConfigFilePath: string; // Absolute path to the drizzle.config.ts file itself
   projectRoot: string; // Root of the project where drizzle.config.ts was found
 }
