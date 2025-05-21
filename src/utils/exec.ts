@@ -1,28 +1,52 @@
 import { spawn } from 'child_process';
 import { logger } from './logger';
 
-export function runCommand(
+type CommandOptions = {
+  readonly cwd?: string;
+  readonly logPrefix?: string;
+};
+
+const createProcess = (
   command: string,
-  args: string[],
-  options?: { cwd?: string; logPrefix?: string }
-): Promise<void> {
+  args: readonly string[],
+  options?: CommandOptions
+) => {
+  return spawn(command, args, {
+    stdio: 'pipe',
+    shell: true,
+    cwd: options?.cwd,
+  });
+};
+
+const getPrefix = (options?: CommandOptions, command?: string): string => 
+  options?.logPrefix || `[${command}]`;
+
+const handleOutput = (
+  process: ReturnType<typeof spawn>,
+  options?: CommandOptions,
+  command?: string
+): void => {
+  const prefix = getPrefix(options, command);
+
+  process.stdout?.on('data', (data) => {
+    logger.info(`${prefix}: ${data.toString().trim()}`);
+  });
+
+  process.stderr?.on('data', (data) => {
+    logger.error(`${prefix} (stderr): ${data.toString().trim()}`);
+  });
+};
+
+export const runCommand = (
+  command: string,
+  args: readonly string[],
+  options?: CommandOptions
+): Promise<void> => {
   logger.verbose(`Executing command: ${command} ${args.join(' ')} ${options?.cwd ? `in ${options.cwd}` : ''}`);
+  
   return new Promise((resolve, reject) => {
-    const process = spawn(command, args, {
-      stdio: 'pipe', // 'inherit' will show output directly, 'pipe' allows us to prefix
-      shell: true, // Important for commands like 'npx' on Windows
-      cwd: options?.cwd,
-    });
-
-    const prefix = options?.logPrefix || `[${command}]`;
-
-    process.stdout?.on('data', (data) => {
-      logger.info(`${prefix}: ${data.toString().trim()}`);
-    });
-
-    process.stderr?.on('data', (data) => {
-      logger.error(`${prefix} (stderr): ${data.toString().trim()}`);
-    });
+    const process = createProcess(command, args, options);
+    handleOutput(process, options, command);
 
     process.on('close', (code) => {
       if (code === 0) {
@@ -39,15 +63,19 @@ export function runCommand(
       reject(err);
     });
   });
-}
+};
 
-export async function runDrizzleKitPush(configPath?: string, projectRoot?: string): Promise<void> {
-  const args = ['drizzle-kit', 'push'];
-  if (configPath) {
-    // drizzle-kit expects config path relative to CWD or absolute
-    args.push('--config', configPath);
-  }
-  // npx should handle finding drizzle-kit from local node_modules or globally
-  // We run it from projectRoot to ensure it picks up local drizzle-kit and config correctly
-  await runCommand('npx', args, { cwd: projectRoot, logPrefix: '[drizzle-kit push]' });
-}
+export const runDrizzleKitPush = async (
+  configPath?: string, 
+  projectRoot?: string
+): Promise<void> => {
+  const args = ['drizzle-kit', 'push'] as const;
+  const argsWithConfig = configPath 
+    ? [...args, '--config', configPath] as const
+    : args;
+    
+  await runCommand('npx', argsWithConfig, { 
+    cwd: projectRoot, 
+    logPrefix: '[drizzle-kit push]' 
+  });
+};

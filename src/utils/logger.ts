@@ -1,47 +1,55 @@
 import type { LogLevel } from '@/types';
 
-class Logger {
-  private currentLevel: LogLevel = 'info';
-  private levelMap: Record<LogLevel, number> = {
-    silent: 0,
-    error: 1,
-    warn: 2,
-    info: 3,
-    verbose: 4,
-  };
+type LoggerState = {
+  readonly currentLevel: LogLevel;
+};
 
-  setLevel(level: LogLevel): void {
-    this.currentLevel = level;
-  }
+const initialState: LoggerState = {
+  currentLevel: 'info'
+};
 
-  private log(level: LogLevel, ...messages: unknown[]): void {
-    if (this.levelMap[level] <= this.levelMap[this.currentLevel]) {
-      const prefix = `[drizzle-assist] [${level.toUpperCase()}]`;
-      if (level === 'error') {
-        console.error(prefix, ...messages);
-      } else if (level === 'warn') {
-        console.warn(prefix, ...messages);
-      } else {
-        console.log(prefix, ...messages);
-      }
+let state = initialState;
+
+const levelMap: Record<LogLevel, number> = {
+  silent: 0,
+  error: 1,
+  warn: 2,
+  info: 3,
+  verbose: 4,
+};
+
+const setLevel = (level: LogLevel): void => {
+  state = { ...state, currentLevel: level };
+};
+
+const shouldLog = (level: LogLevel): boolean => 
+  levelMap[level] <= levelMap[state.currentLevel];
+
+const formatPrefix = (level: LogLevel): string => 
+  `[drizzle-assist] [${level.toUpperCase()}]`;
+
+const log = (level: LogLevel, ...messages: unknown[]): void => {
+  if (shouldLog(level)) {
+    const prefix = formatPrefix(level);
+    if (level === 'error') {
+      console.error(prefix, ...messages);
+    } else if (level === 'warn') {
+      console.warn(prefix, ...messages);
+    } else {
+      console.log(prefix, ...messages);
     }
   }
+};
 
-  verbose(...messages: unknown[]): void {
-    this.log('verbose', ...messages);
-  }
+const verbose = (...messages: unknown[]): void => log('verbose', ...messages);
+const info = (...messages: unknown[]): void => log('info', ...messages);
+const warn = (...messages: unknown[]): void => log('warn', ...messages);
+const error = (...messages: unknown[]): void => log('error', ...messages);
 
-  info(...messages: unknown[]): void {
-    this.log('info', ...messages);
-  }
-
-  warn(...messages: unknown[]): void {
-    this.log('warn', ...messages);
-  }
-
-  error(...messages: unknown[]): void {
-    this.log('error', ...messages);
-  }
-}
-
-export const logger = new Logger();
+export const logger = {
+  setLevel,
+  verbose,
+  info,
+  warn,
+  error
+};
