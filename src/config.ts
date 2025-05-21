@@ -1,7 +1,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { bundleRequire } from 'bundle-require';
-import type { Config as DrizzleKitConfig, PgCredentials } from 'drizzle-kit';
+import type { Config as DrizzleKitConfig } from 'drizzle-kit';
 import type { DrizzleAssistOptions, ResolvedDbConfig } from '@/types';
 import { logger } from '@/utils/logger';
 
@@ -74,12 +74,16 @@ export async function loadAndResolveConfig(
   let connectionString: string | undefined;
 
   if (drizzleConfig.dialect === 'postgresql') {
-    // TypeScript knows `drizzleConfig.dbCredentials` is `PgCredentials | undefined` here.
-    const pgCredentials = drizzleConfig.dbCredentials as PgCredentials | undefined; // Explicit cast for clarity
-    if (typeof pgCredentials === 'string') {
-      connectionString = pgCredentials;
-    } else if (typeof pgCredentials === 'object' && pgCredentials !== null) {
-      connectionString = pgCredentials.url || pgCredentials.connectionString;
+    // Only access dbCredentials if it exists on drizzleConfig
+    const hasDbCredentials = (cfg: unknown): cfg is { dbCredentials: any } =>
+      typeof cfg === 'object' && cfg !== null && 'dbCredentials' in cfg;
+    if (hasDbCredentials(drizzleConfig)) {
+      const pgCredentials = drizzleConfig.dbCredentials as { url?: string; connectionString?: string } | string | undefined;
+      if (typeof pgCredentials === 'string') {
+        connectionString = pgCredentials;
+      } else if (typeof pgCredentials === 'object' && pgCredentials !== null) {
+        connectionString = pgCredentials.url || (pgCredentials as any).connectionString;
+      }
     }
   } else if (!drizzleConfig.dialect) {
     const legacyConfig = drizzleConfig as any; 
